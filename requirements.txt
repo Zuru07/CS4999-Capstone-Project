@@ -1,0 +1,17 @@
+# Dataset Usage
+datasets
+
+# Embedding Tool Usage
+sentence-transformers
+
+# Postgres - Python Connector/Adapter
+psycopg2-binary
+
+# PgVector 
+pgvector
+
+# Pytorch for background transformers usage
+torch
+
+# Dotenv to access .env file
+python-dotenv

@@ -1,4 +1,4 @@
-## CS4999-Capstone-Project
+# CS4999-Capstone-Project
 
 ### Vector Search with Postgres & pgvector
 

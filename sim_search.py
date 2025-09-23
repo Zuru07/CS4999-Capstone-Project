@@ -14,10 +14,10 @@ DB_HOST = os.environ.get("DB_HOST")
 DB_PORT = os.environ.get("DB_PORT")
 
 EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
-TABLE_NAME = 'wikipedia_qa'
+TABLE_NAME = 'wikipedia_corpus'
 
 
-# Database Connection 
+# Database Connection
 def get_db_connection():
     """Establishes a connection to the PostgreSQL database."""
     try:
@@ -35,9 +35,9 @@ def get_db_connection():
         return None
 
 
-# Similarity Search 
-def find_similar_questions(query_text, conn, top_k=5):
-    """Finds the most similar questions to a given query text."""
+# Similarity Search
+def find_relevant_passages(query_text, conn, top_k=5):
+    """Finds the most relevant text passages to a given query text."""
     if not conn:
         print("No database connection.")
         return []
@@ -48,13 +48,13 @@ def find_similar_questions(query_text, conn, top_k=5):
     print(f"Generating embedding for query: '{query_text}'")
     query_embedding = model.encode(query_text)
 
-    print(f"Searching for top {top_k} similar questions...")
+    print(f"Searching for top {top_k} relevant passages...")
     results = []
     with conn.cursor() as cur:
-        # The <=> operator calculates the cosine distance (1 - cosine similarity). We use cosine similarity as a start
+        # FIX: Select 'doc_id' from the table
         cur.execute(
             f"""
-            SELECT question, answer, 1 - (embedding <=> %s) AS similarity
+            SELECT doc_id, content, 1 - (embedding <=> %s) AS similarity
             FROM {TABLE_NAME}
             ORDER BY embedding <=> %s
             LIMIT %s;
@@ -68,22 +68,23 @@ def find_similar_questions(query_text, conn, top_k=5):
 
 # Main Exec
 if __name__ == "__main__":
-    search_query = input("Enter your query: ")
+    search_query = input("Enter your query to find relevant passages: ")
 
     connection = get_db_connection()
     if connection:
-        similar_items = find_similar_questions(search_query, connection)
+        relevant_passages = find_relevant_passages(search_query, connection)
 
         print("\n--- Search Results ---")
         print(f"Query: {search_query}\n")
 
-        if similar_items:
-            for i, (question, answer, similarity) in enumerate(similar_items):
-                print(f"{i+1}. Question: {question}")
-                print(f"   Answer: {answer[:100]}...") # Print a snippet
+        if relevant_passages:
+            # FIX: Unpack 'doc_id' from the results
+            for i, (doc_id, content, similarity) in enumerate(relevant_passages):
+                print(f"{i+1}. Passage ID: {doc_id}")
+                print(f"   Content: {content[:200]}...")
                 print(f"   Similarity Score: {similarity:.4f}\n")
         else:
-            print("No similar questions found.")
+            print("No relevant passages found.")
 
         connection.close()
         print("Database connection closed.")

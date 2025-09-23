@@ -74,7 +74,7 @@ def load_and_embed_corpus():
     model = SentenceTransformer(EMBEDDING_MODEL)
     print("Model loaded successfully.")
 
-    # FIX: Use the correct keys 'id' and 'passage' from the dataset
+    # Fix: Use the correct keys 'id' and 'passage' from the dataset
     doc_ids = [item['id'] for item in ds]
     contents = [item['passage'] for item in ds]
 

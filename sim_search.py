@@ -51,7 +51,7 @@ def find_relevant_passages(query_text, conn, top_k=5):
     print(f"Searching for top {top_k} relevant passages...")
     results = []
     with conn.cursor() as cur:
-        # FIX: Select 'doc_id' from the table
+        # Fix: Select 'doc_id' from the table
         cur.execute(
             f"""
             SELECT doc_id, content, 1 - (embedding <=> %s) AS similarity
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         print(f"Query: {search_query}\n")
 
         if relevant_passages:
-            # FIX: Unpack 'doc_id' from the results
+            # Fix: Unpack 'doc_id' from the results
             for i, (doc_id, content, similarity) in enumerate(relevant_passages):
                 print(f"{i+1}. Passage ID: {doc_id}")
                 print(f"   Content: {content[:200]}...")

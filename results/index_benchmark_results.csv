@@ -1,0 +1,7 @@
+table,index,build_time_s,plan_ms,exec_ms
+hf_docs_10k,hf_docs_10k_ivfflat,1.412,0.291,0.287
+hf_docs_10k,hf_docs_10k_hnsw,1.808,0.152,0.183
+hf_docs_50k,hf_docs_50k_ivfflat,1.305,0.154,0.275
+hf_docs_50k,hf_docs_50k_hnsw,11.502,0.131,0.444
+hf_docs_100k,hf_docs_100k_ivfflat,5.965,0.421,2.642
+hf_docs_100k,hf_docs_100k_hnsw,120.823,0.951,5.313

@@ -1,6 +1,6 @@
 """
 analyze_results.py
-Combined plots for index benchmark results (build / exec / planning)
+Separate plots for index benchmark results (build / exec / planning)
 """
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -34,46 +34,48 @@ def get_metric_value(subset, idx, metric_col):
         return 0
     return sub_idx[metric_col].values[0]
 
-# ---------- PLOTTING ---------- #
-def plot_combined(df, out_file):
+# ---------- SINGLE PLOT FUNCTION ---------- #
+def plot_metric(df, metric_col, ylabel, filename, log_scale=False):
     sizes = sorted(df['size'].unique())
     indices = df['index'].unique()
-    width = 0.35
+    width = 0.25
 
-    fig, axes = plt.subplots(1,3, figsize=(18,5))
+    plt.figure(figsize=(8, 5))
+    ax = plt.gca()
 
-    metrics = [
-        ("build_time_s", "Index Build Time (s)", True),
-        ("exec_ms", "Query Execution Time (ms)", False),
-        ("plan_ms", "Query Planning Time (ms)", False)
-    ]
-
-    for ax, (metric_col, ylabel, log_scale) in zip(axes, metrics):
-        max_val = 0
-        for i, size in enumerate(sizes):
+    max_val = 0
+    for j, idx in enumerate(indices):
+        vals = []
+        for size in sizes:
             subset = df[df['size']==size]
-            for j, idx in enumerate(indices):
-                val = get_metric_value(subset, idx, metric_col)
-                max_val = max(max_val, val)
-                ax.bar(i + j*width, val, width=width, label=idx if i==0 else "", alpha=0.8)
-                ax.text(i + j*width, val + max_val*0.01 + 0.01, f"{val:.2f}",
-                        ha='center', va='bottom', fontsize=8)
+            val = get_metric_value(subset, idx, metric_col)
+            vals.append(val)
+            max_val = max(max_val, val)
+        # shift bar positions slightly for each index
+        x_pos = np.arange(len(sizes)) + j * width
+        ax.bar(x_pos, vals, width=width, label=idx, alpha=0.8)
 
-        ax.set_xticks([i + width/2 for i in range(len(sizes))])
-        ax.set_xticklabels([f"{int(s/1000)}k" for s in sizes])
-        ax.set_xlabel("Dataset size")
-        ax.set_ylabel(ylabel)
-        if log_scale:
-            ax.set_yscale('log')
-        else:
-            ax.set_ylim(0, max_val*1.15)
-        ax.grid(axis='y', linestyle='--', alpha=0.7)
-        ax.set_title(ylabel)
+    # x-axis formatting
+    mid_positions = np.arange(len(sizes)) + width * (len(indices) - 1) / 2
+    ax.set_xticks(mid_positions)
+    ax.set_xticklabels([f"{int(s/1000)}k" for s in sizes])
+    ax.set_xlabel("Dataset size")
+    ax.set_ylabel(ylabel)
+    ax.set_title(ylabel)
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
 
-    axes[0].legend()
+    if log_scale:
+        ax.set_yscale('log')
+    else:
+        ax.set_ylim(0, max_val * 1.2)
+
+    ax.legend()
     plt.tight_layout()
-    plt.savefig(out_file)
+    plt.savefig(filename)
     plt.close()
+    print(f"✅ Saved: {filename}")
 
-plot_combined(df, "results/plots/index_benchmark_combined.png")
-print("✅ Combined plot saved: results/plots/index_benchmark_combined.png")
+# ---------- GENERATE SEPARATE PLOTS ---------- #
+plot_metric(df, "build_time_s", "Index Build Time (s)", "results/plots/build_time.png", log_scale=True)
+plot_metric(df, "exec_ms", "Query Execution Time (ms)", "results/plots/exec_time.png", log_scale=False)
+plot_metric(df, "plan_ms", "Query Planning Time (ms)", "results/plots/plan_time.png", log_scale=False)

@@ -5,11 +5,11 @@ import time
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 conn = psycopg2.connect(
-    dbname="postgres",
-    user="postgres",
-    password="Harshita26",
-    host="localhost",
-    port="5433"
+    dbname="",
+    user="",
+    password="",
+    host="",
+    port=""
 )
 
 cur = conn.cursor()

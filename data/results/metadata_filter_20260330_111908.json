@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-03-30T11:19:08.622328",
+  "dataset_size": 100000,
+  "target_ms": 20,
+  "results": [
+    {
+      "filter_type": "no_filter",
+      "filter_value": null,
+      "avg_ms": 281.50959000049625,
+      "p50_ms": 250.0446999911219,
+      "p95_ms": 413.654600008158,
+      "count": 5
+    },
+    {
+      "filter_type": "category",
+      "filter_value": "cs.AI",
+      "avg_ms": 295.5951600073604,
+      "p50_ms": 246.55400001211092,
+      "p95_ms": 446.92070002201945,
+      "count": 5
+    },
+    {
+      "filter_type": "date",
+      "filter_value": "2020-2024",
+      "avg_ms": 123.82922000833787,
+      "p50_ms": 96.68820002116263,
+      "p95_ms": 251.26640000962652,
+      "count": 0
+    }
+  ]
+}

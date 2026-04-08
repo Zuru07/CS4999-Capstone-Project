@@ -1,4 +1,29 @@
-venv/
+# Virtual environment
+venv
+.venv
+
+# Python cache
 __pycache__/
 *.pyc
-dataset/embeddings.npy
+*.pyo
+*.pyd
+
+# Cached data
+data/cache/
+*.npy
+*.npz
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+__init__.py
+
+# Agents
+AGENTS.md

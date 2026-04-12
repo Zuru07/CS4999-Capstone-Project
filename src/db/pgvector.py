@@ -311,3 +311,21 @@ class PGVectorDB:
                     "SELECT DISTINCT category FROM documents WHERE category IS NOT NULL LIMIT %s"
                 )
                 return [row[0] for row in cur.fetchall()]
+
+    def get_document_by_id(self, doc_id: int) -> Optional[SearchResult]:
+        """Get a document by its ID."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, content, metadata FROM documents WHERE id = %s",
+                    (doc_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return SearchResult(
+                        id=row[0],
+                        content=row[1],
+                        distance=0.0,
+                        metadata=row[2] or {},
+                    )
+                return None

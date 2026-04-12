@@ -30,6 +30,7 @@ class FAISSIndex:
         hnsw_m: int = 16,
         hnsw_ef_construction: int = 200,
         hnsw_ef_search: int = 50,
+        use_gpu: bool = True,
     ):
         """Initialize FAISS index wrapper.
 
@@ -42,6 +43,7 @@ class FAISSIndex:
             hnsw_m: HNSW connections per layer.
             hnsw_ef_construction: HNSW construction parameter.
             hnsw_ef_search: HNSW search parameter.
+            use_gpu: Use GPU for index operations if available.
         """
         self.dimension = dimension
         self.index_type = index_type
@@ -51,11 +53,21 @@ class FAISSIndex:
         self.hnsw_m = hnsw_m
         self.hnsw_ef_construction = hnsw_ef_construction
         self.hnsw_ef_search = hnsw_ef_search
-
+        self.use_gpu = use_gpu
+        
+        self._gpu_resources = None
         self._index: Optional[faiss.Index] = None
         self._id_map: Dict[int, int] = {}
         self._reverse_map: Dict[int, int] = {}
         self._next_id: int = 0
+        
+        if use_gpu and hasattr(faiss, "StandardGpuResources"):
+            try:
+                self._gpu_resources = faiss.StandardGpuResources()
+                print("Using GPU for FAISS index")
+            except Exception:
+                self._gpu_resources = None
+                print("GPU not available, using CPU")
 
     def _create_index(self) -> faiss.Index:
         """Create the appropriate FAISS index based on configuration."""

@@ -25,8 +25,10 @@ class RAGPipeline:
         self.llm_model = llm_model
 
         if embed_model is None:
-            print(f"Loading embedding model ({EMBEDDING_CONFIG.model_name})...")
-            self.embed_model = SentenceTransformer(EMBEDDING_CONFIG.model_name)
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"Loading embedding model ({EMBEDDING_CONFIG.model_name}) on {device}...")
+            self.embed_model = SentenceTransformer(EMBEDDING_CONFIG.model_name, device=device)
         else:
             self.embed_model = embed_model
 

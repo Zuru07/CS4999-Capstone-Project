@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-04-08T14:43:20.352951",
+  "benchmark_type": "pure_retrieval_no_llm",
+  "queries": [
+    "deep learning neural networks",
+    "machine learning applications",
+    "natural language processing",
+    "computer vision techniques",
+    "reinforcement learning algorithms"
+  ],
+  "pgvector": {
+    "latencies_ms": [
+      2172.792969999955,
+      2116.6533999999047,
+      2110.9694950000176,
+      2119.8899449999317,
+      2122.513254999876
+    ],
+    "avg_ms": 2128.563812999937,
+    "min_ms": 2110.9694950000176,
+    "max_ms": 2172.792969999955
+  },
+  "faiss": {
+    "latencies_ms": [
+      2061.9963449999887,
+      2057.2114750000765,
+      2050.6974049998007,
+      2050.7820900000297,
+      2052.3303499999656
+    ],
+    "avg_ms": 2054.6035329999722,
+    "min_ms": 2050.6974049998007,
+    "max_ms": 2061.9963449999887
+  },
+  "speedup_factor": 1.0359973487887337
+}

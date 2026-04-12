@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.db.pgvector import PGVectorDB
+from src.db.pgvector import PGVectorDB, SearchResult
 from src.db.faiss_index import FAISSIndex
 from src.rag.generator import RAGPipeline
 
@@ -33,6 +33,7 @@ class RAGRequest(BaseModel):
     query: str
     limit: int = Field(default=5, ge=1, le=20)
     use_hybrid: bool = True
+    use_faiss: bool = False
     filters: Optional[dict] = None
     stream: bool = False
 
@@ -41,6 +42,7 @@ class RAGResponse(BaseModel):
     answer: str
     documents: List[SearchResult]
     query: str
+    retrieval_engine: str
 
 
 class StatsResponse(BaseModel):
@@ -179,21 +181,37 @@ async def search_faiss(request: SearchRequest):
 
 @app.post("/rag", response_model=RAGResponse)
 async def rag_query(request: RAGRequest):
-    if rag_pipeline is None:
-        raise HTTPException(status_code=503, detail="RAG pipeline not loaded")
+    if rag_pipeline is None or db is None:
+        raise HTTPException(status_code=503, detail="RAG pipeline or database not loaded")
     
-    docs = rag_pipeline.retrieve(
-        request.query,
-        limit=request.limit,
-        use_hybrid=request.use_hybrid,
-        filters=request.filters,
-    )
+    retrieval_engine = "pgvector"
+    
+    if request.use_faiss and faiss_index is not None and faiss_index.total_vectors > 0:
+        query_embedding = rag_pipeline.get_query_embedding(request.query)
+        _, _, faiss_results = faiss_index.search(query_embedding, k=request.limit)
+        
+        docs = []
+        for r in faiss_results:
+            pg_result = db.get_document_by_id(r["id"])
+            if pg_result:
+                pg_result.distance = r["distance"]
+                docs.append(pg_result)
+        
+        retrieval_engine = "faiss"
+    else:
+        docs = rag_pipeline.retrieve(
+            request.query,
+            limit=request.limit,
+            use_hybrid=request.use_hybrid,
+            filters=request.filters,
+        )
     
     if not docs:
         return RAGResponse(
             answer="No documents found matching your query.",
             documents=[],
             query=request.query,
+            retrieval_engine=retrieval_engine,
         )
     
     answer = rag_pipeline.generate(request.query, docs, stream=False)
@@ -210,6 +228,7 @@ async def rag_query(request: RAGRequest):
             for d in docs
         ],
         query=request.query,
+        retrieval_engine=retrieval_engine,
     )
 
 

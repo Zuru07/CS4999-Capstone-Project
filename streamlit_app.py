@@ -30,11 +30,11 @@ def search_documents(query: str, limit: int = 5):
     return {"error": "Request failed"}
 
 
-def rag_query(query: str, limit: int = 5):
+def rag_query(query: str, limit: int = 5, use_faiss: bool = False):
     try:
         resp = requests.post(
             f"{API_URL}/rag",
-            json={"query": query, "limit": limit, "use_hybrid": True, "stream": False},
+            json={"query": query, "limit": limit, "use_hybrid": True, "use_faiss": use_faiss, "stream": False},
             timeout=60,
         )
         if resp.status_code == 200:
@@ -115,16 +115,19 @@ with tab2:
     with query_col:
         rag_query_text = st.text_input("Your question:", placeholder="e.g., What is deep learning?")
         rag_top_k = st.slider("Documents to retrieve:", 1, 10, 3)
+        use_faiss = st.checkbox("Use FAISS (faster)", value=False)
         rag_btn = st.button("Ask", type="primary")
     
     with answer_col:
         if rag_btn and rag_query_text:
             with st.spinner("Generating answer... (this may take a moment)"):
-                result = rag_query(rag_query_text, rag_top_k)
+                result = rag_query(rag_query_text, rag_top_k, use_faiss=use_faiss)
             
             if "error" in result:
                 st.error(result["error"])
             elif result:
+                engine = result.get("retrieval_engine", "pgvector").upper()
+                st.info(f"Retrieved using: {engine}")
                 st.subheader("Answer:")
                 st.write(result.get("answer", "No answer generated"))
                 

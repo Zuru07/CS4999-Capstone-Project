@@ -27,3 +27,4 @@ __init__.py
 
 # Agents
 AGENTS.md
+.sisyphus/

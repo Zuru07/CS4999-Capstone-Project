@@ -69,7 +69,7 @@ class PGVectorDB:
 
                 conn.commit()
 
-    def create_indexes(self, index_type: str = "ivfflat", nlist: int = 100, ef_construction: int = 100) -> None:
+    def create_indexes(self, index_type: str = "ivfflat", nlist: int = 100, ef_construction: int = 100, ef_search: int = 50) -> None:
         """Create vector index with specified type."""
         drop_sql = "DROP INDEX IF EXISTS idx_documents_embedding;"
         with self.connection() as conn:

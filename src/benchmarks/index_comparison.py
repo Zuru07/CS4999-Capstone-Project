@@ -20,7 +20,7 @@ from sentence_transformers import SentenceTransformer
 RESULTS_DIR = Path("data/results")
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Expanded query set for statistical significance
+# Full query set for publication (50 queries)
 QUERIES = [
     "deep learning neural networks",
     "machine learning optimization",
@@ -29,7 +29,6 @@ QUERIES = [
     "reinforcement learning algorithms",
     "transformer attention mechanism",
     "convolutional neural networks",
-    "自然言語処理",  # NLP in Japanese
     "optimization gradient descent",
     "recurrent neural networks LSTM",
     "generative adversarial networks",
@@ -74,6 +73,9 @@ QUERIES = [
     "memory efficient search",
 ]
 
+# Number of runs for statistical significance
+NUM_RUNS = 3
+
 INDEX_CONFIGS = {
     "flat": {
         "pgvector": {"index_type": "flat", "params": {}},
@@ -84,7 +86,7 @@ INDEX_CONFIGS = {
         "faiss": {"index_type": "ivf", "params": {"nlist": 100, "nprobe": 10}},
     },
     "hnsw": {
-        "pgvector": {"index_type": "hnsw", "params": {"ef_construction": 100, "ef_search": 50}},
+        "pgvector": {"index_type": "hnsw", "params": {"ef_construction": 100}},
         "faiss": {"index_type": "hnsw", "params": {"hnsw_m": 16, "ef_construction": 100, "ef_search": 50}},
     },
 }
@@ -210,116 +212,253 @@ def calculate_f1(precision, recall):
     return 2 * (precision * recall) / (precision + recall)
 
 
-def plot_comparison_chart(results, output_dir):
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+def aggregate_run_results(all_runs):
+    """Aggregate results from multiple runs: mean ± std."""
+    aggregated = {}
     
+    for run_results in all_runs:
+        for r in run_results:
+            key = (r["engine"], r["index_type"])
+            if key not in aggregated:
+                aggregated[key] = {
+                    "engine": r["engine"],
+                    "index_type": r["index_type"],
+                    "latency_ms": [],
+                    "recall": [],
+                    "precision": [],
+                    "mrr": [],
+                    "f1": []
+                }
+            aggregated[key]["latency_ms"].append(r["latency_ms"])
+            aggregated[key]["recall"].append(r["recall"])
+            aggregated[key]["precision"].append(r["precision"])
+            aggregated[key]["mrr"].append(r["mrr"])
+            aggregated[key]["f1"].append(r["f1"])
+    
+    final_results = []
+    for key, data in aggregated.items():
+        final_results.append({
+            "engine": data["engine"],
+            "index_type": data["index_type"],
+            "latency_ms": np.mean(data["latency_ms"]),
+            "std_ms": np.std(data["latency_ms"]),
+            "recall": np.mean(data["recall"]),
+            "precision": np.mean(data["precision"]),
+            "mrr": np.mean(data["mrr"]),
+            "f1": np.mean(data["f1"]),
+            "all_runs": {
+                "latency_ms": data["latency_ms"],
+                "recall": data["recall"],
+                "precision": data["precision"],
+            }
+        })
+    
+    return final_results
+
+
+def prepare_data(results):
+    """Prepare sorted data for plotting."""
     engines = ["pgvector", "FAISS"]
     index_types = ["flat", "ivf", "hnsw"]
-    colors = {"pgvector": "#e74c3c", "FAISS": "#3498db"}
     
-    latencies = {eng: [] for eng in engines}
-    recalls = {eng: [] for eng in engines}
-    
+    data = {eng: {} for eng in engines}
     for r in results:
         eng = r["engine"]
-        idx_type = r["index_type"]
-        latencies[eng].append((idx_type, r["latency_ms"]))
-        recalls[eng].append((idx_type, r["recall"]))
+        idx = r["index_type"]
+        data[eng][idx] = r
     
     def get_order(key):
         order = {"flat": 0, "ivf": 1, "hnsw": 2}
         return order.get(key, 99)
     
-    latencies["pgvector"].sort(key=lambda x: get_order(x[0]))
-    latencies["FAISS"].sort(key=lambda x: get_order(x[0]))
-    recalls["pgvector"].sort(key=lambda x: get_order(x[0]))
-    recalls["FAISS"].sort(key=lambda x: get_order(x[0]))
+    return data, get_order
+
+
+def plot_latency_graph(results, output_dir):
+    """Plot latency comparison."""
+    data, get_order = prepare_data(results)
+    index_types = ["flat", "ivf", "hnsw"]
+    colors = {"pgvector": "#e74c3c", "FAISS": "#3498db"}
     
-    if not latencies["FAISS"]:
-        print("Warning: No FAISS results found!")
-        return
-    
-    ax1 = axes[0, 0]
+    fig, ax = plt.subplots(figsize=(10, 6))
     x = np.arange(len(index_types))
     width = 0.35
-    pg_lat = [v for _, v in latencies["pgvector"]]
-    fa_lat = [v for _, v in latencies["FAISS"]]
     
-    bars1 = ax1.bar(x - width/2, pg_lat, width, label="pgvector", color=colors["pgvector"])
-    bars2 = ax1.bar(x + width/2, fa_lat, width, label="FAISS", color=colors["FAISS"])
-    ax1.set_ylabel("Latency (ms)")
-    ax1.set_title("Search Latency Comparison")
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(["Flat", "IVF", "HNSW"])
-    ax1.legend()
-    ax1.set_yscale("log")
-    ax1.bar_label(bars1, fmt="%.1f", fontsize=8)
-    ax1.bar_label(bars2, fmt="%.1f", fontsize=8)
-    ax1.grid(True, alpha=0.3, axis="y")
+    pg_lat = [data["pgvector"][k]["latency_ms"] for k in index_types]
+    fa_lat = [data["FAISS"][k]["latency_ms"] for k in index_types]
     
-    ax2 = axes[0, 1]
-    pg_rec = [v for _, v in recalls["pgvector"]]
-    fa_rec = [v for _, v in recalls["FAISS"]]
-    bars1 = ax2.bar(x - width/2, pg_rec, width, label="pgvector", color=colors["pgvector"])
-    bars2 = ax2.bar(x + width/2, fa_rec, width, label="FAISS", color=colors["FAISS"])
-    ax2.set_ylabel("Recall@5")
-    ax2.set_title("Recall@5 Comparison")
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(["Flat", "IVF", "HNSW"])
-    ax2.legend()
-    ax2.set_ylim(0, 1.2)
-    ax2.bar_label(bars1, fmt="%.2f", fontsize=8)
-    ax2.bar_label(bars2, fmt="%.2f", fontsize=8)
-    ax2.grid(True, alpha=0.3, axis="y")
+    ax.bar(x - width/2, pg_lat, width, label="pgvector", color=colors["pgvector"])
+    ax.bar(x + width/2, fa_lat, width, label="FAISS", color=colors["FAISS"])
+    ax.set_ylabel("Latency (ms)")
+    ax.set_title("Search Latency Comparison")
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Flat", "IVF", "HNSW"])
+    ax.legend()
+    ax.set_yscale("log")
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    fig.savefig(output_dir / "graph_latency.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved: graph_latency.png")
+
+
+def plot_recall_graph(results, output_dir):
+    """Plot Recall@K comparison."""
+    data, get_order = prepare_data(results)
+    index_types = ["flat", "ivf", "hnsw"]
+    colors = {"pgvector": "#e74c3c", "FAISS": "#3498db"}
     
-    ax3 = axes[1, 0]
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = np.arange(len(index_types))
+    width = 0.35
+    
+    pg_rec = [data["pgvector"][k]["recall"] for k in index_types]
+    fa_rec = [data["FAISS"][k]["recall"] for k in index_types]
+    
+    ax.bar(x - width/2, pg_rec, width, label="pgvector", color=colors["pgvector"])
+    ax.bar(x + width/2, fa_rec, width, label="FAISS", color=colors["FAISS"])
+    ax.set_ylabel("Recall@5")
+    ax.set_title("Recall@5 Comparison")
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Flat", "IVF", "HNSW"])
+    ax.legend()
+    ax.set_ylim(0, 1.2)
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    fig.savefig(output_dir / "graph_recall.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved: graph_recall.png")
+
+
+def plot_precision_graph(results, output_dir):
+    """Plot Precision@K comparison."""
+    data, get_order = prepare_data(results)
+    index_types = ["flat", "ivf", "hnsw"]
+    colors = {"pgvector": "#e74c3c", "FAISS": "#3498db"}
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = np.arange(len(index_types))
+    width = 0.35
+    
+    pg_prec = [data["pgvector"][k]["precision"] for k in index_types]
+    fa_prec = [data["FAISS"][k]["precision"] for k in index_types]
+    
+    ax.bar(x - width/2, pg_prec, width, label="pgvector", color=colors["pgvector"])
+    ax.bar(x + width/2, fa_prec, width, label="FAISS", color=colors["FAISS"])
+    ax.set_ylabel("Precision@5")
+    ax.set_title("Precision@5 Comparison")
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Flat", "IVF", "HNSW"])
+    ax.legend()
+    ax.set_ylim(0, 1.2)
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    fig.savefig(output_dir / "graph_precision.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved: graph_precision.png")
+
+
+def plot_f1_graph(results, output_dir):
+    """Plot F1@K comparison."""
+    data, get_order = prepare_data(results)
+    index_types = ["flat", "ivf", "hnsw"]
+    colors = {"pgvector": "#e74c3c", "FAISS": "#3498db"}
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = np.arange(len(index_types))
+    width = 0.35
+    
+    pg_f1 = [data["pgvector"][k]["f1"] for k in index_types]
+    fa_f1 = [data["FAISS"][k]["f1"] for k in index_types]
+    
+    ax.bar(x - width/2, pg_f1, width, label="pgvector", color=colors["pgvector"])
+    ax.bar(x + width/2, fa_f1, width, label="FAISS", color=colors["FAISS"])
+    ax.set_ylabel("F1@5")
+    ax.set_title("F1@5 Comparison")
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Flat", "IVF", "HNSW"])
+    ax.legend()
+    ax.set_ylim(0, 1.2)
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    fig.savefig(output_dir / "graph_f1.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved: graph_f1.png")
+
+
+def plot_speedup_graph(results, output_dir):
+    """Plot speedup comparison."""
+    data, get_order = prepare_data(results)
+    index_types = ["flat", "ivf", "hnsw"]
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
     speedups = []
-    for idx_type in index_types:
-        pg_lat = next(v for k, v in latencies["pgvector"] if k == idx_type)
-        fa_lat = next(v for k, v in latencies["FAISS"] if k == idx_type)
-        speedups.append(pg_lat / fa_lat if fa_lat > 0 else 0)
+    for idx in index_types:
+        pg = data["pgvector"][idx]["latency_ms"]
+        fa = data["FAISS"][idx]["latency_ms"]
+        speedups.append(pg / fa if fa > 0 else 0)
     
-    bars = ax3.bar(index_types, speedups, color=["#2ecc71", "#9b59b6", "#f39c12"], edgecolor="black")
-    ax3.set_ylabel("Speedup (pgvector/FAISS)")
-    ax3.set_title("FAISS Speedup vs pgvector")
-    ax3.bar_label(bars, fmt="%.0fx", fontsize=10, fontweight="bold")
-    ax3.axhline(y=1, color="red", linestyle="--", alpha=0.5, label="1x (equal)")
-    ax3.grid(True, alpha=0.3, axis="y")
+    bars = ax.bar(index_types, speedups, color=["#2ecc71", "#9b59b6", "#f39c12"], edgecolor="black")
+    ax.set_ylabel("Speedup (pgvector/FAISS)")
+    ax.set_title("FAISS Speedup vs pgvector")
+    ax.bar_label(bars, fmt="%.0fx", fontsize=12, fontweight="bold")
+    ax.axhline(y=1, color="red", linestyle="--", alpha=0.5)
+    ax.grid(True, alpha=0.3, axis="y")
+    plt.tight_layout()
+    fig.savefig(output_dir / "graph_speedup.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved: graph_speedup.png")
+
+
+def plot_summary_table(results, output_dir):
+    """Plot summary table."""
+    data, get_order = prepare_data(results)
+    index_types = ["flat", "ivf", "hnsw"]
     
-    ax4 = axes[1, 1]
-    ax4.axis("off")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.axis("off")
     
-    table_data = [["Index Type", "pgvector", "FAISS", "Speedup", "pg Recall", "FA Recall"]]
-    for idx_type in index_types:
-        pg_lat = next(v for k, v in latencies["pgvector"] if k == idx_type)
-        fa_lat = next(v for k, v in latencies["FAISS"] if k == idx_type)
-        pg_rec = next(v for k, v in recalls["pgvector"] if k == idx_type)
-        fa_rec = next(v for k, v in recalls["FAISS"] if k == idx_type)
-        speedup = pg_lat / fa_lat if fa_lat > 0 else 0
-        table_data.append([
-            idx_type.upper(),
-            f"{pg_lat:.2f}ms",
-            f"{fa_lat:.4f}ms",
-            f"{speedup:.0f}x",
-            f"{pg_rec:.2f}",
-            f"{fa_rec:.2f}"
-        ])
+    table_data = [["Index", "Engine", "Latency", "Recall", "Precision", "F1", "MRR", "Speedup"]]
+    baseline = data["pgvector"]["flat"]["latency_ms"]
     
-    table = ax4.table(cellText=table_data[1:], colLabels=table_data[0],
-                      loc="center", cellLoc="center")
+    for idx in index_types:
+        for eng in ["pgvector", "FAISS"]:
+            r = data[eng][idx]
+            if eng == "FAISS":
+                spd = int(baseline / r["latency_ms"])
+                spd_str = f"{spd}x"
+            else:
+                spd_str = "-"
+            table_data.append([
+                idx.upper(), eng, f"{r['latency_ms']:.2f}ms", 
+                f"{r['recall']:.0%}", f"{r['precision']:.0%}", 
+                f"{r['f1']:.0%}", f"{r['mrr']:.2f}", spd_str
+            ])
+    
+    table = ax.table(cellText=table_data[1:], colLabels=table_data[0],
+                    loc="center", cellLoc="center")
     table.auto_set_font_size(False)
     table.set_fontsize(10)
     table.scale(1.2, 1.8)
-    for i in range(6):
+    for i in range(len(table_data[0])):
         table[(0, i)].set_facecolor("#34495e")
         table[(0, i)].set_text_props(color="white", fontweight="bold")
-    ax4.set_title("Performance Summary", fontsize=12, fontweight="bold", pad=20)
-    
-    plt.suptitle("pgvector vs FAISS: Comprehensive Index Comparison", fontsize=14, fontweight="bold", y=1.02)
+    ax.set_title("Performance Summary", fontsize=14, fontweight="bold", pad=20)
     plt.tight_layout()
-    fig.savefig(output_dir / "index_comparison.png", dpi=150, bbox_inches="tight")
+    fig.savefig(output_dir / "graph_summary.png", dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: index_comparison.png")
+    print(f"  Saved: graph_summary.png")
+
+
+def plot_comparison_chart(results, output_dir):
+    """Plot all graphs in separate files."""
+    plot_latency_graph(results, output_dir)
+    plot_recall_graph(results, output_dir)
+    plot_precision_graph(results, output_dir)
+    plot_f1_graph(results, output_dir)
+    plot_speedup_graph(results, output_dir)
+    plot_summary_table(results, output_dir)
 
 
 def plot_latency_detailed(results, output_dir):
@@ -373,10 +512,16 @@ def main():
     db = PGVectorDB()
     print(f"  Documents in DB: {db.count()}")
     
-    results = []
-    pgvector_flat_results = []  # Will store pgvector flat as ground truth
+    all_run_results = []  # Store results from all runs
     
-    results = []
+    print(f"\n[4/4] Running benchmark {NUM_RUNS} times...")
+    for run_num in range(1, NUM_RUNS + 1):
+        print(f"\n{'='*50}")
+        print(f"RUN {run_num}/{NUM_RUNS}")
+        print(f"{'='*50}")
+        
+        results = []
+        pgvector_flat_results = []
     
     # Pass 1: Run all flat indexes first to establish ground truth
     print("\n" + "="*50)
@@ -444,10 +589,16 @@ def main():
         print(f"\n  {idx_type.upper()}: pg {pg_result['avg_ms']:.2f}ms vs FAISS {fa_result['avg_ms']:.4f}ms ({speedup:.0f}x)")
         print(f"         pg: R={pg_recall:.0%} P={pg_precision:.0%} MRR={pg_mrr:.2} F1={pg_f1:.0%}")
         print(f"         FAISS: R={fa_recall:.0%} P={fa_precision:.0%} MRR={fa_mrr:.2} F1={fa_f1:.0%}")
+        
+        all_run_results.append(results)
+    
+    # Aggregate results from all runs
+    if NUM_RUNS > 1:
+        results = aggregate_run_results(all_run_results)
+        print("\n[Aggregated] Results from all runs (mean ± std)")
     
     print("\n[4/4] Generating graphs...")
     plot_comparison_chart(results, RESULTS_DIR)
-    plot_latency_detailed(results, RESULTS_DIR)
     
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     output = {
@@ -455,6 +606,7 @@ def main():
         "dataset_size": len(embeddings),
         "dimension": EMBEDDING_CONFIG.dimension,
         "num_queries": len(QUERIES),
+        "num_runs": NUM_RUNS,
         "results": results,
     }
     fp = RESULTS_DIR / f"index_comparison_{ts}.json"

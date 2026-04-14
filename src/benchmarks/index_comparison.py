@@ -72,7 +72,9 @@ QUERIES = [
     "embedding quantization",
     "index compression",
     "memory efficient search",
-]  # 50 queries for statistical significance
+]
+
+INDEX_CONFIGS = {
     "flat": {
         "pgvector": {"index_type": "flat", "params": {}},
         "faiss": {"index_type": "flat", "params": {}},
@@ -82,7 +84,7 @@ QUERIES = [
         "faiss": {"index_type": "ivf", "params": {"nlist": 100, "nprobe": 10}},
     },
     "hnsw": {
-        "pgvector": {"index_type": "hnsw", "params": {"ef_construction": 100}},
+        "pgvector": {"index_type": "hnsw", "params": {"ef_construction": 100, "ef_search": 50}},
         "faiss": {"index_type": "hnsw", "params": {"hnsw_m": 16, "ef_construction": 100, "ef_search": 50}},
     },
 }
@@ -108,7 +110,14 @@ def benchmark_pgvector(db, query_embs, index_config, limit=5, warmup=3):
         times.append(elapsed)
         results.append([x.id for x in r])
     
-    return {"times": times, "avg_ms": np.mean(times), "results": results}
+    return {
+    "times": times, 
+    "avg_ms": np.mean(times), 
+    "std_ms": np.std(times),
+    "min_ms": np.min(times),
+    "max_ms": np.max(times),
+    "results": results
+}
 
 
 def benchmark_faiss(embeddings, ids, query_embs, index_config, limit=5, warmup=3):
@@ -140,7 +149,15 @@ def benchmark_faiss(embeddings, ids, query_embs, index_config, limit=5, warmup=3
         times.append(elapsed)
         results.append([x["id"] for x in r])
     
-    return {"times": times, "avg_ms": np.mean(times), "results": results, "build_time": build_time}
+    return {
+    "times": times, 
+    "avg_ms": np.mean(times), 
+    "std_ms": np.std(times),
+    "min_ms": np.min(times),
+    "max_ms": np.max(times),
+    "results": results, 
+    "build_time": build_time
+}
 
 
 def calculate_recall(predicted, ground_truth, k=5):
@@ -204,15 +221,19 @@ def plot_comparison_chart(results, output_dir):
     recalls = {eng: [] for eng in engines}
     
     for r in results:
-        eng = r["engine"]  # Keep original case from results
+        eng = r["engine"]
         idx_type = r["index_type"]
         latencies[eng].append((idx_type, r["latency_ms"]))
         recalls[eng].append((idx_type, r["recall"]))
     
-    latencies["pgvector"].sort(key=lambda x: x[0])
-    latencies["FAISS"].sort(key=lambda x: x[0])
-    recalls["pgvector"].sort(key=lambda x: x[0])
-    recalls["FAISS"].sort(key=lambda x: x[0])
+    def get_order(key):
+        order = {"flat": 0, "ivf": 1, "hnsw": 2}
+        return order.get(key, 99)
+    
+    latencies["pgvector"].sort(key=lambda x: get_order(x[0]))
+    latencies["FAISS"].sort(key=lambda x: get_order(x[0]))
+    recalls["pgvector"].sort(key=lambda x: get_order(x[0]))
+    recalls["FAISS"].sort(key=lambda x: get_order(x[0]))
     
     if not latencies["FAISS"]:
         print("Warning: No FAISS results found!")
@@ -440,20 +461,30 @@ def main():
     with open(fp, "w") as f:
         json.dump(output, f, indent=2)
     
-    print("\n" + "=" * 90)
-    print("FINAL SUMMARY")
-    print("=" * 90)
-    print(f"\n{'Engine':<10} {'Index':<6} {'Latency':<12} {'Recall':<8} {'Precision':<10} {'MRR':<8} {'F1':<8} {'Speedup'}")
-    print("-" * 85)
+    print("\n" + "=" * 110)
+    print("FINAL SUMMARY (Statistical Analysis)")
+    print("=" * 110)
+    print(f"\n{'Engine':<10} {'Index':<6} {'Latency (ms)':<20} {'Recall':<8} {'Precision':<10} {'MRR':<8} {'F1':<8} {'Speedup'}")
+    print("-" * 100)
     
     baseline = next(r["latency_ms"] for r in results if r["engine"].lower() == "pgvector" and r["index_type"] == "flat")
     for r in results:
         speedup = baseline / r["latency_ms"] if r["engine"].lower() == "faiss" else 1.0
         marker = f"{speedup:.0f}x" if r["engine"].lower() == "faiss" else "-"
-        print(f"{r['engine']:<10} {r['index_type']:<6} {r['latency_ms']:>10.2f}ms   {r['recall']:.2%}    {r['precision']:.2%}       {r['mrr']:.2f}    {r['f1']:.2%}    {marker}")
+        # Format with mean ± std
+        std_val = r.get("std_ms", 0)
+        if std_val > 0:
+            lat_str = f"{r['latency_ms']:.2f} ± {std_val:.2f}"
+        else:
+            lat_str = f"{r['latency_ms']:.2f}"
+        print(f"{r['engine']:<10} {r['index_type']:<6} {lat_str:<20} {r['recall']:.2%}    {r['precision']:.2%}       {r['mrr']:.2f}    {r['f1']:.2%}    {marker}")
     
-    print(f"\nResults saved to: {fp}")
-    print("=" * 70)
+    # Print sample size info
+    num_queries = len(QUERIES)
+    num_docs = len(embeddings)
+    print(f"\nSample size: {num_queries} queries, {num_docs} embeddings ({num_queries * num_docs} query-doc pairs)")
+    print(f"Results saved to: {fp}")
+    print("=" * 110)
 
 
 if __name__ == "__main__":

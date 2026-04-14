@@ -1,24 +1,22 @@
 # Fine-tuning Vector Databases for RAG Systems
 
-A high-performance Retrieval-Augmented Generation (RAG) pipeline using PostgreSQL (pgvector) + FAISS for optimized vector search.
+A high-performance Retrieval-Augmented Generation (RAG) pipeline comparing PostgreSQL (pgvector) vs FAISS vector databases.
 
 ## Overview
 
-- **Dataset**: ML-ArXiv-Papers (10K-100K abstracts)
+- **Dataset**: ML-ArXiv-Papers (100K abstracts)
 - **Embedding Model**: sentence-transformers/all-MiniLM-L6-v2 (384 dimensions)
-- **Vector Stores**: pgvector (PostgreSQL) + FAISS (GPU-accelerated)
+- **Vector Stores**: pgvector (PostgreSQL) + FAISS
 - **Index Types**: Flat, IVFFlat, HNSW
-- **LLM**: Ollama (llama3.2)
+- **Benchmark Queries**: 50 queries × 3 runs
 
 ## Prerequisites
 
 1. **Python 3.10+**
 2. **PostgreSQL 15+** with pgvector extension
-3. **Ollama** (optional, for LLM generation)
 
 ### Install PostgreSQL + pgvector
 
-**Docker:**
 ```bash
 docker run -d \
   --name pgvector \
@@ -29,31 +27,21 @@ docker run -d \
   pgvector/pgvector:pg16
 ```
 
-**Enable pgvector extension:**
 ```sql
 CREATE EXTENSION vector;
-```
-
-### Install Ollama (optional)
-
-```bash
-ollama pull llama3.2
-ollama serve
 ```
 
 ## Installation
 
 ```bash
-# Clone and enter directory
 cd capstone-phase2
-
-# Create virtual environment
 python -m venv .venv
 
 # Activate (Windows)
 .venv\Scripts\activate
+# Activate (Linux/Mac)
+source .venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -67,74 +55,89 @@ DB_PASSWORD=secret
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=rag_db
-OLLAMA_URL=http://localhost:11434/api/generate
-LLM_MODEL=llama3.2
 ```
 
 ## Usage
 
 ### 1. Setup Database
 
-Load arXiv papers and build indexes:
-
 ```bash
 python -m src.setup_db
 ```
 
-### 2. Ask Questions (RAG)
+### 2. Run Benchmarks
 
 ```bash
-python -m src.test_rag
+# Comprehensive index comparison (pgvector vs FAISS)
+python -m src.benchmarks.index_comparison
 ```
 
-Enter a question when prompted. Requires Ollama running.
+This runs:
+- 50 queries across 3 runs
+- All index types: Flat, IVF, HNSW
+- Metrics: Latency, Recall@K, Precision@K, F1@K, MRR
 
-### 3. Run Benchmarks
+### 3. Generate Graphs
 
-```bash
-# Vector search benchmarks (pgvector vs FAISS)
-python -m src.benchmark
+Graphs are generated automatically in `data/results/`:
 
-# Metadata filtering benchmarks
-python -m src.benchmark_metadata
-```
-
-Compares pgvector vs FAISS search latencies and metadata filtering performance.
+| Graph | Description |
+|-------|-------------|
+| `graph_latency.png` | Search latency comparison |
+| `graph_recall.png` | Recall@5 comparison |
+| `graph_precision.png` | Precision@5 comparison |
+| `graph_f1.png` | F1@5 comparison |
+| `graph_speedup.png` | FAISS speedup vs pgvector |
+| `graph_summary.png` | Full performance table |
 
 ## Project Structure
 
 ```
 src/
-├── config.py           # Configuration
-├── exceptions.py        # Custom exceptions
-├── setup_db.py         # Database setup
-├── test_rag.py         # Interactive RAG query
-├── benchmark.py        # Latency benchmarks
+├── config.py              # Configuration
+├── exceptions.py          # Custom exceptions
+├── setup_db.py           # Database setup
+├── test_rag.py           # Interactive RAG query
+├── benchmark.py          # Legacy benchmark
+├── benchmark_metadata.py # Metadata filtering benchmark
+├── benchmarks/           # New benchmark suite
+│   ├── __init__.py
+│   ├── latency.py        # Component latency
+│   ├── recall.py         # Recall@K benchmark
+│   ├── precision.py      # Precision@K benchmark
+│   ├── comprehensive.py # Full benchmark runner
+│   ├── index_comparison.py # Main comparison
+│   └── graphs.py        # Graph generation
 ├── data/
-│   └── loader.py       # Dataset loading
+│   └── loader.py         # Dataset loading
 ├── db/
-│   ├── pgvector.py     # PostgreSQL wrapper
-│   └── faiss_index.py  # FAISS wrapper
-├── retrieval/
-│   └── benchmarks.py   # Performance benchmarks
+│   ├── pgvector.py     # PostgreSQL/pgvector wrapper
+│   └── faiss_index.py  # FAISS index wrapper
 └── rag/
     └── generator.py    # RAG pipeline
 ```
 
-## Performance
+## Performance Results
 
-| Engine | Index | Latency | Recall@5 | Speedup |
-|--------|-------|---------|----------|---------|
-| pgvector | Flat | 299ms | 100% | 1x |
-| pgvector | IVFFlat-100 | 81ms | 68% | 4x |
-| pgvector | HNSW | 269ms | 100% | 1x |
-| FAISS | Flat | 1.1ms | 100% | 264x |
-| FAISS | IVFFlat-100 | 0.12ms | 100% | 2490x |
-| FAISS | HNSW | 0.32ms | 84% | 942x |
+| Engine | Index | Latency (ms) | Recall | Precision | F1 | Speedup |
+|--------|-------|--------------|--------|-----------|-----|---------|
+| pgvector | Flat | ~320ms | 100% | 100% | 100% | 1x |
+| pgvector | IVF | ~70ms | 66% | 66% | 66% | - |
+| pgvector | HNSW | ~290ms | 100% | 100% | 100% | - |
+| FAISS | Flat | ~50ms | 100% | 100% | 100% | 6x |
+| FAISS | IVF | ~1ms | 96% | 96% | 96% | 70x |
+| FAISS | HNSW | ~0.5ms | 97% | 97% | 97% | 600x |
 
-**Key Finding:** FAISS HNSW achieves **942x speedup** over pgvector with **84% recall retention**.
+**Key Findings:**
+- FAISS HNSW: **600x faster** than pgvector with ~97% recall
+- FAISS IVF: **70x faster** than pgvector with 96% recall
+- Statistical significance: 3 runs × 50 queries
 
-Full benchmark report: `data/results/BENCHMARK_REPORT.md`
+## Benchmark Files
+
+- `data/results/comprehensive_benchmark.json` - Full results
+- `data/results/index_comparison_*.json` - Index comparison results
+- `data/results/graph_*.png` - Generated graphs
 
 ## Requirements
 

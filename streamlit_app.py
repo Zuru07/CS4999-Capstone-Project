@@ -15,7 +15,7 @@ def check_api():
         return None
     return None
 
-
+    
 def search_documents(query: str, limit: int = 5):
     try:
         resp = requests.post(

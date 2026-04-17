@@ -419,7 +419,7 @@ def plot_summary_table(results, output_dir):
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.axis("off")
     
-    table_data = [["Index", "Engine", "Latency", "Recall", "Precision", "F1", "MRR", "Speedup"]]
+    table_data = [["Index", "Engine", "Latency", "Recall", "Precision", "F1", "Speedup"]]
     baseline = data["pgvector"]["flat"]["latency_ms"]
     
     for idx in index_types:
@@ -433,7 +433,7 @@ def plot_summary_table(results, output_dir):
             table_data.append([
                 idx.upper(), eng, f"{r['latency_ms']:.2f}ms", 
                 f"{r['recall']:.0%}", f"{r['precision']:.0%}", 
-                f"{r['f1']:.0%}", f"{r['mrr']:.2f}", spd_str
+                f"{r['f1']:.0%}", spd_str
             ])
     
     table = ax.table(cellText=table_data[1:], colLabels=table_data[0],
@@ -587,8 +587,8 @@ def main():
         
         speedup = pg_result["avg_ms"] / fa_result["avg_ms"] if fa_result["avg_ms"] > 0 else 0
         print(f"\n  {idx_type.upper()}: pg {pg_result['avg_ms']:.2f}ms vs FAISS {fa_result['avg_ms']:.4f}ms ({speedup:.0f}x)")
-        print(f"         pg: R={pg_recall:.0%} P={pg_precision:.0%} MRR={pg_mrr:.2} F1={pg_f1:.0%}")
-        print(f"         FAISS: R={fa_recall:.0%} P={fa_precision:.0%} MRR={fa_mrr:.2} F1={fa_f1:.0%}")
+        print(f"         pg: R={pg_recall:.0%} P={pg_precision:.0%} F1={pg_f1:.0%}")
+        print(f"         FAISS: R={fa_recall:.0%} P={fa_precision:.0%} F1={fa_f1:.0%}")
         
         all_run_results.append(results)
     
@@ -616,8 +616,8 @@ def main():
     print("\n" + "=" * 110)
     print("FINAL SUMMARY (Statistical Analysis)")
     print("=" * 110)
-    print(f"\n{'Engine':<10} {'Index':<6} {'Latency (ms)':<20} {'Recall':<8} {'Precision':<10} {'MRR':<8} {'F1':<8} {'Speedup'}")
-    print("-" * 100)
+    print(f"\n{'Engine':<10} {'Index':<6} {'Latency (ms)':<20} {'Recall':<8} {'Precision':<10} {'F1':<8} {'Speedup'}")
+    print("-" * 85)
     
     baseline = next(r["latency_ms"] for r in results if r["engine"].lower() == "pgvector" and r["index_type"] == "flat")
     for r in results:
@@ -629,7 +629,7 @@ def main():
             lat_str = f"{r['latency_ms']:.2f} ± {std_val:.2f}"
         else:
             lat_str = f"{r['latency_ms']:.2f}"
-        print(f"{r['engine']:<10} {r['index_type']:<6} {lat_str:<20} {r['recall']:.2%}    {r['precision']:.2%}       {r['mrr']:.2f}    {r['f1']:.2%}    {marker}")
+        print(f"{r['engine']:<10} {r['index_type']:<6} {lat_str:<20} {r['recall']:.2%}    {r['precision']:.2%}    {r['f1']:.2%}    {marker}")
     
     # Print sample size info
     num_queries = len(QUERIES)
